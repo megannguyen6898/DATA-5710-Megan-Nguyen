@@ -1,0 +1,51 @@
+---
+title: "Assignment 2_DATA 5710_GM"
+author: "Megan Nguyen"
+date: "3/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(bnlearn)
+bn = model2network("[A][B][C][E|B:A:C][F|A:C][G|E][H|E:F]")
+plot(bn,main="Figure 1")
+#> FALSE
+```
+
+```{r}
+#1. Markov Blanket of E
+mb(bn,"E")
+```
+
+```{r}
+#2. Joint distribution
+Pr(A,B,C,E,F,G,H) = Pr(A)Pr(B)Pr(C)Pr(E|A,B,C)Pr(F|A,C)Pr(G|E)Pr(H|E,F)
+```
+
+```{r}
+#3
+bnlearn::dsep(bn,"B","F","G")
+```
+
+B and F are not d-seperated by G so B and F are connected via path through G. It is not required to be conditionally independent given G
+
+```{r}
+#4
+bnlearn::dsep(bn,"B","F",c("A","C"))
+```
+
+B and F are d-seperated by A and C so B and F are not connected via path through A and C. They are conditionally independent given A and C
+
+#5. Explaining away effect
+
+When an event C occurs, the confirmed probability of one cause A of the observed event C will reduce the probability of other causes.
+
+Example -
+
+Assume event C (trees failing) can be caused by either an event B (a storm) or an event A (a hurricane). If the trees do not fall, a storm does not happen AND the trees are not uprooted. If the trees fall, there are only two explanations A and B. We know A and B are independent given C, but when C happens and A is confirmed to be one explanation, B's probability goes down. A explains away the effect of B or in other words, A and B are no longer independent given C. 
