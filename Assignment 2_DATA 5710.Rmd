@@ -1,0 +1,121 @@
+---
+title: "Assignment 2_DATA 5710"
+author: "Megan Nguyen"
+date: "3/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+library(MASS)
+library(matrixStats)
+```
+
+```{r cars}
+woodlark <- read.csv("/Users/megannguyen/Desktop/DATA5711/woodlark.csv",header=TRUE)
+print(woodlark)
+```
+
+```{r}
+woodlark08=woodlark$Y08
+time=woodlark$time.order
+woodlark08=woodlark08[time]
+n=length(woodlark08)
+plot(time,woodlark08)
+xmat1=matrix(woodlark08,nrow=n,ncol=1)
+xmat=cbind(xmat1,time);
+dim_x=dim(xmat)
+nparam=dim_x[2]
+y=woodlark08;
+```
+
+#Run glm command to get MLE of $\hat{\beta}$ = ($\hat{\beta_0}$, $\hat{\beta_1}$)
+
+```{r}
+fit_id <- glm(woodlark08 ~ time, family=poisson(link = log))
+beta_hat=fit_id$coefficients;
+beta_var=vcov(fit_id)
+```
+
+```{r}
+lines(time,fit_id$fitted.values)
+beta_prec=solve(beta_var);
+beta_sim=MASS::mvrnorm(10000,beta_hat,beta_var)
+nloop=10000
+nwarmup=2000;
+alpha=matrix(0,nloop,1)
+fit_val=matrix(0,n,nloop-nwarmup)
+mean32_val=matrix(0,nloop-nwarmup,1)
+prob_yk_32=matrix(0,7,nloop-nwarmup)
+pred_val=matrix(0,nloop,1)
+beta_prior_mean=rep(0,nparam);
+cbeta=n;
+beta_prior_var=diag(rep(cbeta,nparam))
+beta_prior_prec=diag(rep(1/cbeta,nparam))
+beta_curr=c(rep(0,nparam))
+mean_curr=xmat%*%beta_curr
+beta=matrix(0,nloop,nparam)
+```
+#X values for prediction
+```{r}
+xmat_predict=c(1,32)
+for (j in 1:nloop){
+  beta_prop=beta_sim[j,]
+  if (j>1){
+    beta_curr=beta[j-1,];
+  }
+  mean_prop=xmat%*%beta_prop;
+  mean_curr=xmat%*%beta_curr;
+  log_posterior_prop=sum((mean_prop*y)-exp(mean_prop))-t(beta_prop)%*%beta_prior_prec%*%beta_prop/2;
+  log_posterior_curr=sum((mean_curr*y)-exp(mean_curr))-t(beta_curr)%*%beta_prior_prec%*%beta_curr/2;
+  log_proposal_prop=-t(beta_prop-beta_hat)%*%beta_prec%*%(beta_prop-beta_hat)/2;
+  log_proposal_curr=-t(beta_curr-beta_hat)%*%beta_prec%*%(beta_curr-beta_hat)/2;
+  alpha[j]=min(1,exp(log_posterior_prop+log_proposal_curr-log_posterior_curr-log_proposal_prop));
+  uu=runif(1)
+  if(j>1){
+    if (alpha[j]>uu){
+      beta[j,]=beta_prop;
+    }else{
+      beta[j,]=beta_curr
+    }
+  }else{
+    beta[j,]=beta_prop
+  }
+  if (j>nwarmup){
+    fit_val[,j-nwarmup]=exp(xmat%*%beta[j,])
+    #computing the predicted mean number of woodlarks that would blow at 32F
+    mean32_val[j-nwarmup]=exp(xmat_predict%*%beta[j,])
+    #Computinbg the probability that y=k at 32F for k=0,1,...,6
+    for (k in 1:6){
+      prob_yk_32[k,j-nwarmup]=exp(-mean32_val[j-nwarmup])*mean32_val[j-nwarmup]^(k-1)/factorial(k-1)
+    }
+    prob_yk_32[7,j-nwarmup]=1-sum(prob_yk_32[1:6,j-nwarmup])
+  }
+}
+hist(beta[,2],40)
+fit_hat=rowMeans(fit_val)
+fit_lcl=rowQuantiles(fit_val,probs=0.025)
+fit_ucl=rowQuantiles(fit_val,probs=0.975)
+plot(time,woodlark08)
+lines(time,fit_hat)
+lines(time,fit_lcl)
+lines(time,fit_ucl)
+```
+
+```{r}
+#Probability of failure =1-P(y=0). Histogram below
+hist(1-prob_yk_32[1,],40)
+lcl_fail=quantile(1-prob_yk_32[1,],0.025)
+ucl_fail=quantile(1-prob_yk_32[1,],0.975)
+cred_int=c(lcl_fail,ucl_fail)
+```
+
